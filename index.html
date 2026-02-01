@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>積木アプリ v3.1 - Bug Fix & UI</title>
+    <title>積木アプリ v4.0 - Colorful Shapes</title>
     <style>
         body {
             margin: 0;
@@ -15,41 +15,54 @@
             touch-action: none;
         }
 
-        /* ツールバー */
+        /* ツールバー：スクロール可能に */
         #toolbar {
             width: 140px;
             background-color: #333;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px 5px;
-            gap: 25px;
+            padding: 10px 5px;
+            gap: 15px;
             border-right: 2px solid #444;
             z-index: 10;
+            overflow-y: auto;
         }
 
-        /* ツールバー内の見本 */
+        /* ツールバー内の見本サイズ統一 */
         .shape-item {
             cursor: grab;
-            transition: transform 0.2;
             flex-shrink: 0;
-            transform: scale(0.4); /* 全体的に少し小さく */
+            transform: scale(0.35);
+            margin: -35px 0; /* 余白を詰めてたくさん表示 */
         }
 
-        /* 平行四辺形だけさらに少し小さく調整 */
-        .shape-item.parallelogram {
-            transform: scale(0.35) skew(-20deg);
-        }
-
-        /* 積木の基本サイズと色 */
-        .square { width: 150px; height: 150px; background-color: skyblue; }
-        .rect { width: 240px; height: 120px; background-color: MediumPurple; }
+        /* 各図形の定義（3倍サイズベース） */
+        .square { width: 150px; height: 150px; background-color: #ff00ff; } /* マゼンタ */
+        .rect { width: 240px; height: 120px; background-color: #ff00ff; }
         .parallelogram { 
             width: 180px; height: 120px; 
-            background-color: MediumSeaGreen;
+            background-color: #0000ff; /* 青 */
+            clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
+        }
+        .triangle {
+            width: 150px; height: 150px; background-color: #ffcc00; /* 黄 */
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+        .rhombus {
+            width: 150px; height: 150px; background-color: #00ffff; /* 水色 */
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+        }
+        .pentagon {
+            width: 150px; height: 150px; background-color: #0099ff; /* 明るい青 */
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+        }
+        .hexagon {
+            width: 150px; height: 150px; background-color: #00cc66; /* 緑 */
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
         }
 
-        /* キャンバス */
+        /* キャンバス設定 */
         #canvas {
             flex-grow: 1;
             position: relative;
@@ -63,21 +76,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            outline: none;
-            /* transformの基準を中心に */
             transform-origin: center center;
         }
 
-        .placed-shape.selected {
-            outline: 2px dashed #ffffff55;
-        }
+        .placed-shape.selected { outline: 2px dashed #ffffff55; }
 
         .rotate-handle {
             position: absolute;
-            right: -15px;
-            bottom: -15px;
-            width: 30px;
-            height: 30px;
+            right: -15px; bottom: -15px;
+            width: 30px; height: 30px;
             background-color: #ff4444;
             border-radius: 50%;
             cursor: alias;
@@ -85,33 +92,21 @@
             display: none;
             z-index: 110;
         }
-
-        .selected .rotate-handle {
-            display: block;
-        }
+        .selected .rotate-handle { display: block; }
 
         .btn {
-            width: 100px;
-            padding: 12px;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.9em;
+            width: 100px; padding: 10px; color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.9em;
+            margin-bottom: 5px; flex-shrink: 0;
         }
-
-        #spin-btn { background-color: #4CAF50; margin-top: auto; margin-bottom: 10px; }
+        #spin-btn { background-color: #4CAF50; margin-top: 10px; }
         #reset-btn { background-color: #ff4444; }
-        
-        /* 回転アニメーション */
+
         @keyframes spin {
-            from { transform: rotate(var(--start-angle)) var(--skew); }
-            to { transform: rotate(calc(var(--start-angle) + 360deg)) var(--skew); }
+            from { transform: rotate(var(--start-angle)); }
+            to { transform: rotate(calc(var(--start-angle) + 360deg)); }
         }
-        .spinning {
-            animation: spin 10s linear infinite;
-        }
+        .spinning { animation: spin 10s linear infinite; }
     </style>
 </head>
 <body>
@@ -119,7 +114,11 @@
 <div id="toolbar">
     <div class="shape-item square" draggable="true" data-shape="square"></div>
     <div class="shape-item rect" draggable="true" data-shape="rect"></div>
+    <div class="shape-item triangle" draggable="true" data-shape="triangle"></div>
+    <div class="shape-item rhombus" draggable="true" data-shape="rhombus"></div>
     <div class="shape-item parallelogram" draggable="true" data-shape="parallelogram"></div>
+    <div class="shape-item pentagon" draggable="true" data-shape="pentagon"></div>
+    <div class="shape-item hexagon" draggable="true" data-shape="hexagon"></div>
     
     <button id="spin-btn" class="btn">まわる</button>
     <button id="reset-btn" class="btn">りせっと</button>
@@ -134,14 +133,8 @@
     let isSpinning = false;
     let selectedEl = null;
 
-    canvas.addEventListener('mousedown', (e) => {
-        if (e.target === canvas) deselectAll();
-    });
-
-    function deselectAll() {
-        if (selectedEl) selectedEl.classList.remove('selected');
-        selectedEl = null;
-    }
+    canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) deselectAll(); });
+    function deselectAll() { if (selectedEl) selectedEl.classList.remove('selected'); selectedEl = null; }
 
     document.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('shape-item')) {
@@ -153,10 +146,8 @@
 
     canvas.addEventListener('drop', (e) => {
         e.preventDefault();
-        const shapeType = e.dataTransfer.getData('shapeType');
-        if (shapeType) {
-            createShape(shapeType, e.clientX - canvas.offsetLeft - 75, e.clientY - 75);
-        }
+        const type = e.dataTransfer.getData('shapeType');
+        if (type) createShape(type, e.clientX - canvas.offsetLeft - 75, e.clientY - 75);
     });
 
     function createShape(type, x, y) {
@@ -165,11 +156,7 @@
         wrapper.style.left = `${x}px`;
         wrapper.style.top = `${y}px`;
         wrapper.dataset.angle = 0;
-        
-        const skew = type === 'parallelogram' ? 'skew(-20deg)' : 'skew(0deg)';
-        wrapper.style.setProperty('--skew', skew);
         wrapper.style.setProperty('--start-angle', '0deg');
-        wrapper.style.transform = `rotate(0deg) ${skew}`;
 
         const handle = document.createElement('div');
         handle.className = 'rotate-handle';
@@ -182,13 +169,12 @@
             wrapper.classList.add('selected');
         });
 
-        makeTransformable(wrapper, handle, skew);
+        makeTransformable(wrapper, handle);
         canvas.appendChild(wrapper);
     }
 
-    function makeTransformable(el, handle, skew) {
-        let isDragging = false;
-        let isRotating = false;
+    function makeTransformable(el, handle) {
+        let isDragging = false, isRotating = false;
         let startX, startY, startAngle, centerX, centerY;
 
         el.addEventListener('mousedown', (e) => {
@@ -219,24 +205,18 @@
                 const newAngle = startAngle + angleDiff;
                 el.dataset.angle = newAngle;
                 el.style.setProperty('--start-angle', `${newAngle}deg`);
-                el.style.transform = `rotate(${newAngle}deg) ${skew}`;
+                el.style.transform = `rotate(${newAngle}deg)`;
             }
         });
 
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            isRotating = false;
-            el.style.zIndex = '';
-        });
+        document.addEventListener('mouseup', () => { isDragging = false; isRotating = false; el.style.zIndex = ''; });
     }
 
     spinBtn.addEventListener('click', () => {
         isSpinning = !isSpinning;
-        const shapes = document.querySelectorAll('.placed-shape');
-        shapes.forEach(shape => {
+        document.querySelectorAll('.placed-shape').forEach(shape => {
             if (isSpinning) {
-                const currentAngle = shape.dataset.angle || 0;
-                shape.style.setProperty('--start-angle', `${currentAngle}deg`);
+                shape.style.setProperty('--start-angle', `${shape.dataset.angle || 0}deg`);
                 shape.classList.add('spinning');
             } else {
                 shape.classList.remove('spinning');
@@ -247,7 +227,7 @@
     });
 
     resetBtn.addEventListener('click', () => {
-        if (confirm('すべてのパーツを消してもよろしいですか？')) {
+        if (confirm('ぜんぶ きえちゃうけど いい？')) {
             canvas.innerHTML = '';
             if (isSpinning) spinBtn.click();
         }
