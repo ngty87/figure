@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>積木アプリ v4.0 - Colorful Shapes</title>
+    <title>積木アプリ v4.1 - Smooth Drag & Drop</title>
     <style>
         body {
             margin: 0;
@@ -15,7 +15,6 @@
             touch-action: none;
         }
 
-        /* ツールバー：スクロール可能に */
         #toolbar {
             width: 140px;
             background-color: #333;
@@ -29,40 +28,38 @@
             overflow-y: auto;
         }
 
-        /* ツールバー内の見本サイズ統一 */
         .shape-item {
             cursor: grab;
             flex-shrink: 0;
             transform: scale(0.35);
-            margin: -35px 0; /* 余白を詰めてたくさん表示 */
+            margin: -35px 0;
+            user-select: none;
         }
 
-        /* 各図形の定義（3倍サイズベース） */
-        .square { width: 150px; height: 150px; background-color: #ff00ff; } /* マゼンタ */
+        /* 図形定義 */
+        .square { width: 150px; height: 150px; background-color: #ff00ff; }
         .rect { width: 240px; height: 120px; background-color: #ff00ff; }
         .parallelogram { 
-            width: 180px; height: 120px; 
-            background-color: #0000ff; /* 青 */
+            width: 180px; height: 120px; background-color: #0000ff;
             clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
         }
         .triangle {
-            width: 150px; height: 150px; background-color: #ffcc00; /* 黄 */
+            width: 150px; height: 150px; background-color: #ffcc00;
             clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
         }
         .rhombus {
-            width: 150px; height: 150px; background-color: #00ffff; /* 水色 */
+            width: 150px; height: 150px; background-color: #00ffff;
             clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
         }
         .pentagon {
-            width: 150px; height: 150px; background-color: #0099ff; /* 明るい青 */
+            width: 150px; height: 150px; background-color: #0099ff;
             clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
         }
         .hexagon {
-            width: 150px; height: 150px; background-color: #00cc66; /* 緑 */
+            width: 150px; height: 150px; background-color: #00cc66;
             clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
         }
 
-        /* キャンバス設定 */
         #canvas {
             flex-grow: 1;
             position: relative;
@@ -77,6 +74,7 @@
             align-items: center;
             justify-content: center;
             transform-origin: center center;
+            z-index: 100;
         }
 
         .placed-shape.selected { outline: 2px dashed #ffffff55; }
@@ -93,6 +91,15 @@
             z-index: 110;
         }
         .selected .rotate-handle { display: block; }
+
+        /* ドラッグ中のゴースト表示用 */
+        .dragging-ghost {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0.8;
+            z-index: 9999;
+            transform-origin: center center;
+        }
 
         .btn {
             width: 100px; padding: 10px; color: white; border: none;
@@ -112,13 +119,13 @@
 <body>
 
 <div id="toolbar">
-    <div class="shape-item square" draggable="true" data-shape="square"></div>
-    <div class="shape-item rect" draggable="true" data-shape="rect"></div>
-    <div class="shape-item triangle" draggable="true" data-shape="triangle"></div>
-    <div class="shape-item rhombus" draggable="true" data-shape="rhombus"></div>
-    <div class="shape-item parallelogram" draggable="true" data-shape="parallelogram"></div>
-    <div class="shape-item pentagon" draggable="true" data-shape="pentagon"></div>
-    <div class="shape-item hexagon" draggable="true" data-shape="hexagon"></div>
+    <div class="shape-item square" data-shape="square"></div>
+    <div class="shape-item rect" data-shape="rect"></div>
+    <div class="shape-item triangle" data-shape="triangle"></div>
+    <div class="shape-item rhombus" data-shape="rhombus"></div>
+    <div class="shape-item parallelogram" data-shape="parallelogram"></div>
+    <div class="shape-item pentagon" data-shape="pentagon"></div>
+    <div class="shape-item hexagon" data-shape="hexagon"></div>
     
     <button id="spin-btn" class="btn">まわる</button>
     <button id="reset-btn" class="btn">りせっと</button>
@@ -132,23 +139,52 @@
     const spinBtn = document.getElementById('spin-btn');
     let isSpinning = false;
     let selectedEl = null;
+    let ghost = null;
+    let dragType = null;
 
-    canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) deselectAll(); });
-    function deselectAll() { if (selectedEl) selectedEl.classList.remove('selected'); selectedEl = null; }
+    // --- ツールバーからの新規ドラッグ処理 ---
+    document.querySelectorAll('.shape-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+            dragType = item.dataset.shape;
+            ghost = item.cloneNode(true);
+            ghost.classList.add('dragging-ghost');
+            // スケールを1に戻す
+            ghost.style.transform = 'scale(1)';
+            document.body.appendChild(ghost);
+            updateGhostPos(e);
+        });
+    });
 
-    document.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('shape-item')) {
-            e.dataTransfer.setData('shapeType', e.target.dataset.shape);
+    function updateGhostPos(e) {
+        if (!ghost) return;
+        // マウス位置が図形の中心に来るように配置
+        const rect = ghost.getBoundingClientRect();
+        ghost.style.left = `${e.clientX - rect.width / 2}px`;
+        ghost.style.top = `${e.clientY - rect.height / 2}px`;
+    }
+
+    // --- 全体共通の移動・ドロップ処理 ---
+    document.addEventListener('mousemove', (e) => {
+        if (ghost) updateGhostPos(e);
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        if (ghost) {
+            const canvasRect = canvas.getBoundingClientRect();
+            // キャンバス内にドロップされたか判定
+            if (e.clientX >= canvasRect.left && e.clientX <= canvasRect.right &&
+                e.clientY >= canvasRect.top && e.clientY <= canvasRect.bottom) {
+                const rect = ghost.getBoundingClientRect();
+                createShape(dragType, e.clientX - canvasRect.left - rect.width / 2, e.clientY - canvasRect.top - rect.height / 2);
+            }
+            document.body.removeChild(ghost);
+            ghost = null;
+            dragType = null;
         }
     });
 
-    canvas.addEventListener('dragover', (e) => e.preventDefault());
-
-    canvas.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const type = e.dataTransfer.getData('shapeType');
-        if (type) createShape(type, e.clientX - canvas.offsetLeft - 75, e.clientY - 75);
-    });
+    canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) deselectAll(); });
+    function deselectAll() { if (selectedEl) selectedEl.classList.remove('selected'); selectedEl = null; }
 
     function createShape(type, x, y) {
         const wrapper = document.createElement('div');
@@ -175,13 +211,14 @@
 
     function makeTransformable(el, handle) {
         let isDragging = false, isRotating = false;
-        let startX, startY, startAngle, centerX, centerY;
+        let offX, offY, startAngle, centerX, centerY, startMouseAngle;
 
         el.addEventListener('mousedown', (e) => {
             if (e.target === handle) return;
             isDragging = true;
-            startX = e.clientX - el.offsetLeft;
-            startY = e.clientY - el.offsetTop;
+            // つかんだ位置と左上の差を保持してズレを防止
+            offX = e.clientX - el.offsetLeft;
+            offY = e.clientY - el.offsetTop;
             el.style.zIndex = 1000;
         });
 
@@ -190,18 +227,18 @@
             const rect = el.getBoundingClientRect();
             centerX = rect.left + rect.width / 2;
             centerY = rect.top + rect.height / 2;
-            startX = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            startMouseAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
             startAngle = parseFloat(el.dataset.angle) || 0;
         });
 
         document.addEventListener('mousemove', (e) => {
             if (isDragging) {
-                el.style.left = `${e.clientX - startX}px`;
-                el.style.top = `${e.clientY - startY}px`;
+                el.style.left = `${e.clientX - offX}px`;
+                el.style.top = `${e.clientY - offY}px`;
             }
             if (isRotating) {
                 const currentMouseAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-                const angleDiff = (currentMouseAngle - startX) * (180 / Math.PI);
+                const angleDiff = (currentMouseAngle - startMouseAngle) * (180 / Math.PI);
                 const newAngle = startAngle + angleDiff;
                 el.dataset.angle = newAngle;
                 el.style.setProperty('--start-angle', `${newAngle}deg`);
@@ -209,7 +246,11 @@
             }
         });
 
-        document.addEventListener('mouseup', () => { isDragging = false; isRotating = false; el.style.zIndex = ''; });
+        document.addEventListener('mouseup', () => { 
+            isDragging = false; 
+            isRotating = false; 
+            el.style.zIndex = '100'; 
+        });
     }
 
     spinBtn.addEventListener('click', () => {
