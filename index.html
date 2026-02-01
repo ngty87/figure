@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>積木アプリ v3.0 - Animation & UI</title>
+    <title>積木アプリ v3.1 - Bug Fix & UI</title>
     <style>
         body {
             margin: 0;
@@ -28,12 +28,17 @@
             z-index: 10;
         }
 
-        /* ツールバー内の見本（枠に収まるよう縮小） */
+        /* ツールバー内の見本 */
         .shape-item {
             cursor: grab;
-            transition: transform 0.2s;
-            transform: scale(0.5); /* ツールバー内では半分に表示 */
+            transition: transform 0.2;
             flex-shrink: 0;
+            transform: scale(0.4); /* 全体的に少し小さく */
+        }
+
+        /* 平行四辺形だけさらに少し小さく調整 */
+        .shape-item.parallelogram {
+            transform: scale(0.35) skew(-20deg);
         }
 
         /* 積木の基本サイズと色 */
@@ -42,7 +47,6 @@
         .parallelogram { 
             width: 180px; height: 120px; 
             background-color: MediumSeaGreen;
-            transform: skew(-20deg); 
         }
 
         /* キャンバス */
@@ -53,7 +57,6 @@
             overflow: hidden;
         }
 
-        /* 配置された図形 */
         .placed-shape {
             position: absolute;
             cursor: move;
@@ -61,14 +64,14 @@
             align-items: center;
             justify-content: center;
             outline: none;
+            /* transformの基準を中心に */
+            transform-origin: center center;
         }
 
-        /* 選択時の枠（わかりやすくするため） */
         .placed-shape.selected {
             outline: 2px dashed #ffffff55;
         }
 
-        /* 回転ハンドル（初期状態は非表示） */
         .rotate-handle {
             position: absolute;
             right: -15px;
@@ -79,11 +82,10 @@
             border-radius: 50%;
             cursor: alias;
             border: 2px solid white;
-            display: none; /* 普段は見えない */
+            display: none;
             z-index: 110;
         }
 
-        /* 選択中だけハンドルを表示 */
         .selected .rotate-handle {
             display: block;
         }
@@ -132,11 +134,8 @@
     let isSpinning = false;
     let selectedEl = null;
 
-    // キャンバスをクリックで選択解除
     canvas.addEventListener('mousedown', (e) => {
-        if (e.target === canvas) {
-            deselectAll();
-        }
+        if (e.target === canvas) deselectAll();
     });
 
     function deselectAll() {
@@ -167,9 +166,9 @@
         wrapper.style.top = `${y}px`;
         wrapper.dataset.angle = 0;
         
-        // 平行四辺形用のskew設定を保持
-        const skew = type === 'parallelogram' ? 'skew(-20deg)' : '';
+        const skew = type === 'parallelogram' ? 'skew(-20deg)' : 'skew(0deg)';
         wrapper.style.setProperty('--skew', skew);
+        wrapper.style.setProperty('--start-angle', '0deg');
         wrapper.style.transform = `rotate(0deg) ${skew}`;
 
         const handle = document.createElement('div');
@@ -183,15 +182,14 @@
             wrapper.classList.add('selected');
         });
 
-        makeTransformable(wrapper, handle, type);
+        makeTransformable(wrapper, handle, skew);
         canvas.appendChild(wrapper);
     }
 
-    function makeTransformable(el, handle, type) {
+    function makeTransformable(el, handle, skew) {
         let isDragging = false;
         let isRotating = false;
         let startX, startY, startAngle, centerX, centerY;
-        const skew = type === 'parallelogram' ? 'skew(-20deg)' : '';
 
         el.addEventListener('mousedown', (e) => {
             if (e.target === handle) return;
@@ -232,7 +230,6 @@
         });
     }
 
-    // 「まわる」ボタンの処理
     spinBtn.addEventListener('click', () => {
         isSpinning = !isSpinning;
         const shapes = document.querySelectorAll('.placed-shape');
