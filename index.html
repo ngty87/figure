@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>積木アプリ - Build with Shapes</title>
+    <title>積木アプリ v2.0 - Rotate & Color</title>
     <style>
         body {
             margin: 0;
@@ -12,37 +12,33 @@
             background-color: #1a1a1a;
             font-family: sans-serif;
             overflow: hidden;
+            touch-action: none; /* タブレット操作用 */
         }
 
         /* ツールバー */
         #toolbar {
-            width: 120px;
+            width: 160px;
             background-color: #333;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px 10px;
-            gap: 30px;
+            gap: 40px;
             border-right: 2px solid #444;
             z-index: 10;
         }
 
-        /* 積木のパーツ共通設定 */
         .shape-item {
-            width: 50px;
-            height: 50px;
-            background-color: skyblue;
             cursor: grab;
             transition: transform 0.2s;
         }
 
-        .shape-item:active { cursor: grabbing; }
-
-        /* 各形状 */
-        .square { width: 50px; height: 50px; }
-        .rect { width: 80px; height: 40px; }
+        /* 積木のサイズと色（3倍サイズ） */
+        .square { width: 150px; height: 150px; background-color: skyblue; }
+        .rect { width: 240px; height: 120px; background-color: MediumPurple; }
         .parallelogram { 
-            width: 60px; height: 40px; 
+            width: 180px; height: 120px; 
+            background-color: MediumSeaGreen;
             transform: skew(-20deg); 
         }
 
@@ -57,24 +53,37 @@
         /* キャンバス上のパーツ */
         .placed-shape {
             position: absolute;
-            background-color: skyblue;
             cursor: move;
-            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* リセットボタン */
+        /* 回転ハンドル */
+        .rotate-handle {
+            position: absolute;
+            right: -10px;
+            bottom: -10px;
+            width: 25px;
+            height: 25px;
+            background-color: #ff4444;
+            border-radius: 50%;
+            cursor: alias;
+            border: 2px solid white;
+            z-index: 100;
+        }
+
         #reset-btn {
             margin-top: auto;
-            padding: 10px 15px;
+            padding: 15px 20px;
             background-color: #ff4444;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 1.1em;
         }
-
-        #reset-btn:hover { background-color: #ff6666; }
     </style>
 </head>
 <body>
@@ -83,7 +92,6 @@
     <div class="shape-item square" draggable="true" data-shape="square"></div>
     <div class="shape-item rect" draggable="true" data-shape="rect"></div>
     <div class="shape-item parallelogram" draggable="true" data-shape="parallelogram"></div>
-    
     <button id="reset-btn">りせっと</button>
 </div>
 
@@ -93,81 +101,93 @@
     const canvas = document.getElementById('canvas');
     const resetBtn = document.getElementById('reset-btn');
 
-    // ドラッグ開始時の処理
     document.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('shape-item')) {
             e.dataTransfer.setData('shapeType', e.target.dataset.shape);
-            // マウス位置と要素の左上とのオフセットを計算（簡易的）
             e.dataTransfer.setData('offsetX', e.offsetX);
             e.dataTransfer.setData('offsetY', e.offsetY);
         }
     });
 
-    // キャンバス上でのドロップを許可
-    canvas.addEventListener('dragover', (e) => {
-        e.preventDefault();
-    });
+    canvas.addEventListener('dragover', (e) => e.preventDefault());
 
-    // ドロップした時の処理
     canvas.addEventListener('drop', (e) => {
         e.preventDefault();
         const shapeType = e.dataTransfer.getData('shapeType');
-        const offsetX = e.dataTransfer.getData('offsetX');
-        const offsetY = e.dataTransfer.getData('offsetY');
-
+        const offsetX = e.dataTransfer.getData('offsetX') || 75;
+        const offsetY = e.dataTransfer.getData('offsetY') || 75;
         if (shapeType) {
             createShape(shapeType, e.clientX - canvas.offsetLeft - offsetX, e.clientY - offsetY);
         }
     });
 
-    // 新しい積木を作成する関数
     function createShape(type, x, y) {
-        const shape = document.createElement('div');
-        shape.classList.add('placed-shape');
-        
-        // 型に応じたクラス付与
-        if (type === 'square') shape.classList.add('square');
-        if (type === 'rect') shape.classList.add('rect');
-        if (type === 'parallelogram') shape.classList.add('parallelogram');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'placed-shape ' + type;
+        wrapper.style.left = `${x}px`;
+        wrapper.style.top = `${y}px`;
+        wrapper.dataset.angle = 0;
 
-        shape.style.left = `${x}px`;
-        shape.style.top = `${y}px`;
+        // 回転ハンドルを追加
+        const handle = document.createElement('div');
+        handle.className = 'rotate-handle';
+        wrapper.appendChild(handle);
 
-        // キャンバス内での再移動（ドラッグ）
-        makeDraggable(shape);
-
-        canvas.appendChild(shape);
+        makeTransformable(wrapper, handle);
+        canvas.appendChild(wrapper);
     }
 
-    // キャンバス上の要素を動かせるようにする
-    function makeDraggable(el) {
+    function makeTransformable(el, handle) {
         let isDragging = false;
-        let startX, startY;
+        let isRotating = false;
+        let startX, startY, startAngle, centerX, centerY;
 
+        // 移動イベント
         el.addEventListener('mousedown', (e) => {
+            if (e.target === handle) return;
             isDragging = true;
             startX = e.clientX - el.offsetLeft;
             startY = e.clientY - el.offsetTop;
-            el.style.zIndex = 1000; // 最前面へ
+            el.style.zIndex = 1000;
+        });
+
+        // 回転イベント
+        handle.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            isRotating = true;
+            const rect = el.getBoundingClientRect();
+            centerX = rect.left + rect.width / 2;
+            centerY = rect.top + rect.height / 2;
+            const startMouseAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            startAngle = parseFloat(el.dataset.angle) || 0;
+            startX = startMouseAngle;
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            el.style.left = `${e.clientX - startX}px`;
-            el.style.top = `${e.clientY - startY}px`;
+            if (isDragging) {
+                el.style.left = `${e.clientX - startX}px`;
+                el.style.top = `${e.clientY - startY}px`;
+            }
+            if (isRotating) {
+                const currentMouseAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                const angleDiff = (currentMouseAngle - startX) * (180 / Math.PI);
+                const newAngle = startAngle + angleDiff;
+                el.dataset.angle = newAngle;
+                // 平行四辺形の場合は元々のskewを維持しつつ回転
+                const extraTransform = el.classList.contains('parallelogram') ? 'skew(-20deg)' : '';
+                el.style.transform = `rotate(${newAngle}deg) ${extraTransform}`;
+            }
         });
 
         document.addEventListener('mouseup', () => {
             isDragging = false;
+            isRotating = false;
             el.style.zIndex = '';
         });
     }
 
-    // リセット機能
     resetBtn.addEventListener('click', () => {
-        if (confirm('すべてのパーツを消してもよろしいですか？')) {
-            canvas.innerHTML = '';
-        }
+        if (confirm('すべてのパーツを消してもよろしいですか？')) canvas.innerHTML = '';
     });
 </script>
 
